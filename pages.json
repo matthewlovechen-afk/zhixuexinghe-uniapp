@@ -15,6 +15,12 @@
 		{
 			"path": "pages/profile/profile",
 			"style": { "navigationBarTitleText": "我的档案" }
+		},
+		{
+		  "path": "pages/webview/webview",
+		  "style": {
+		    "navigationBarTitleText": "资源详情"
+		  }
 		}
 	],
 	"tabBar": {
