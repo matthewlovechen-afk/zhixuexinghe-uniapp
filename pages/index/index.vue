@@ -1,14 +1,11 @@
 <template>
   <view class="container">
-    <!-- 头部 -->
     <view class="header">
-      <text class="title">学习资源推荐系统</text>
-      <text class="subtitle">基于CNN智能推荐 | 多平台学习资源</text>
+      <text class="title">学习资源推荐</text>
+      <text class="subtitle"> 多平台学习资源</text>
     </view>
 
-    <!-- 表单卡片 -->
     <view class="card">
-      <!-- 年级 -->
       <view class="form-item">
         <text class="label">年级</text>
         <picker @change="onGradeChange" :range="gradeList">
@@ -16,13 +13,11 @@
         </picker>
       </view>
 
-      <!-- 学科 -->
       <view class="form-item">
         <text class="label">学科</text>
         <input v-model="subject" class="input" placeholder="例如：数学、物理、英语、编程" />
       </view>
 
-      <!-- 推荐数量 -->
       <view class="form-item">
         <text class="label">推荐数量</text>
         <picker @change="onTopKChange" :range="topKList">
@@ -30,13 +25,11 @@
         </picker>
       </view>
 
-      <!-- 提交按钮 -->
       <button class="submit-btn" @click="getRecommend" :loading="loading">
         开始推荐
       </button>
     </view>
 
-    <!-- 推荐结果 -->
     <view class="card result-card" v-if="showResult">
       <view class="result-title-bar">推荐结果</view>
       <view class="result-item" v-for="(item, idx) in list" :key="idx">
@@ -48,7 +41,11 @@
           <text class="tag tag-score">匹配度 {{ Math.round(item.score * 100) }}%</text>
         </view>
         <view class="item-desc">{{ item.description || '暂无简介' }}</view>
-        <view class="item-link" @click="openUrl(item.url)">查看详情 →</view>
+        
+        <!-- ✅ 这里修好了！-->
+        <view class="result-link" @click="openLink(item.url)">
+          查看详情 →
+        </view>
       </view>
     </view>
   </view>
@@ -58,34 +55,33 @@
 export default {
   data() {
     return {
-      // 年级选项
       gradeList: ['小学', '初中', '高中', '大学'],
       grade: '初中',
-
-      // 学科
       subject: '数学',
-
-      // 推荐数量
       topKList: ['5', '10', '15', '20'],
       top_k: '10',
-
       loading: false,
       list: [],
       showResult: false
     }
   },
   methods: {
-    // 年级选择
+    // ✅ 正确的跳转方法
+    openLink(url) {
+      const encodedUrl = encodeURIComponent(url);
+      uni.navigateTo({
+        url: `/pages/webview/webview?url=${encodedUrl}`
+      });
+    },
+
     onGradeChange(e) {
       this.grade = this.gradeList[e.detail.value]
     },
 
-    // 数量选择
     onTopKChange(e) {
       this.top_k = this.topKList[e.detail.value]
     },
 
-    // 请求推荐接口
     async getRecommend() {
       if (!this.subject.trim()) {
         uni.showToast({ title: '请输入学科', icon: 'none' })
@@ -118,13 +114,6 @@ export default {
       }
 
       this.loading = false
-    },
-
-    // 打开链接
-    openUrl(url) {
-      uni.navigateTo({
-        url: '/pages/webview/webview?url=' + encodeURIComponent(url)
-      })
     }
   }
 }
@@ -191,7 +180,6 @@ export default {
   margin-top: 20rpx;
 }
 
-/* 结果样式 */
 .result-title-bar {
   font-size: 32rpx;
   font-weight: bold;
@@ -251,7 +239,7 @@ export default {
   margin-bottom: 12rpx;
 }
 
-.item-link {
+.result-link {
   font-size: 26rpx;
   color: #667eea;
 }
