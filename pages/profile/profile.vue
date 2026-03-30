@@ -1,300 +1,245 @@
+<template>
+	<view class="profile-container">
+		<view class="user-header">
+			<image 
+				class="avatar" 
+				:src="userInfo.avatar || defaultAvatar" 
+				@click="changeAvatar" 
+				mode="aspectFill"
+			></image>
+			<view class="info">
+				<text class="username">{{ userInfo.username || '未登录' }}</text>
+			</view>
+		</view>
+
+		<view class="action-list">
+			<view class="action-item" @click="changeAvatar">
+				<text>更换头像</text>
+				<view class="right-area">
+					<image v-if="uploading" class="loading-icon" src="/static/loading.gif" mode="aspectFit"></image>
+					<text class="arrow">></text>
+				</view>
+			</view>
+            
+			<view class="action-item" @click="goTo('edit-username/edit-username')">
+				<text>修改用户名</text>
+				<text class="arrow">></text>
+			</view>
+            
+			<view class="action-item" @click="goTo('edit-password/edit-password')">
+				<text>修改密码</text>
+				<text class="arrow">></text>
+			</view>
+		</view>
+
+		<view class="logout-btn-wrap">
+			<button class="logout-btn" @click="handleLogout">退出登录</button>
+		</view>
+	</view>
+</template>
+
 <script setup>
 import { ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 
-const transcribedText = ref('');
-const isLoading = ref(false);
-const errorInfo = ref('');
+const userInfo = ref({});
+const uploading = ref(false); // 用于控制上传状态显示
+// 确保你在 static 目录下有一张默认头像，例如 static/avatar-user.png
+const defaultAvatar = '/static/avatar-user.png'; 
 
-// ================= 配置区域 =================
-// 你的阿里云服务器地址
-const API_URL = 'http://114.55.97.51:8000/transcribe/';
-// 你的API密钥（后端验证用）
-const API_KEY = 'jackeylove';
-// ===========================================
+// 每次进入页面时加载最新的用户信息
+onShow(() => {
+	const storedInfo = uni.getStorageSync('userInfo');
+	if (storedInfo) {
+		userInfo.value = storedInfo;
+	} else {
+		// 如果本地没有用户信息，说明可能未登录或缓存失效
+		uni.reLaunch({ url: '/pages/login/login' });
+	}
+});
 
-// --- 获取文件的临时路径（兼容H5）---
-const getFilePath = (file) => {
-    // H5端：从File对象获取临时URL
-    if (typeof file === 'object' && file instanceof File) {
-        return URL.createObjectURL(file);
-    }
-    // 其他端：直接返回路径
-    return file;
+// 通用的页面跳转函数
+const goTo = (pageName) => {
+	uni.navigateTo({
+		url: `/pages/profile/${pageName}`
+	});
 };
 
-// --- 1. 选择音频文件逻辑 ---
-const chooseAudioFile = () => {
-    if (isLoading.value) return;
-    errorInfo.value = '';
-    transcribedText.value = '';
+// 更换头像的核心逻辑
+const changeAvatar = () => {
+	if (!userInfo.value._id) {
+		uni.showToast({ title: '用户信息异常，请重新登录', icon: 'none' });
+		return;
+	}
 
-    // #ifdef H5
-    uni.chooseFile({
-        count: 1,
-        type: 'media',
-        success: (res) => {
-            console.log('选择的文件:', res.tempFiles[0]);
-            // 获取真实的File对象
-            const fileObj = res.tempFiles[0].originalFileObj || res.tempFiles[0];
-            // H5端也使用 uploadFile
-            handleUpload(fileObj, true);
-        },
-        fail: (err) => {
-            console.error('H5选择失败:', err);
-            errorInfo.value = '选择文件失败';
-            uni.showToast({ title: '选择文件失败', icon: 'none' });
-        }
-    });
-    // #endif
+	// 1. 前端选择图片
+	uni.chooseImage({
+		count: 1, // 最多选择1张
+		sizeType: ['compressed'], // 可以指定是原图还是压缩图，默认二者都有
+		sourceType: ['album', 'camera'], // 从相册选择或使用相机
+		success: async (res) => {
+			const tempFilePath = res.tempFilePaths[0];
+			
+			// 开启加载提示
+			uploading.value = true;
+			uni.showLoading({ title: '正在上传...', mask: true });
 
-    // #ifdef APP-PLUS
-    uni.chooseFile({
-        count: 1,
-        type: 'media',
-        success: (res) => {
-            console.log('App选择的文件:', res.tempFiles[0]);
-            const filePath = res.tempFiles[0].path;
-            handleUpload(filePath);
-        },
-        fail: (err) => {
-            console.error('App选择失败:', err);
-            errorInfo.value = '选择文件失败';
-            uni.showToast({ title: '选择文件失败', icon: 'none' });
-        }
-    });
-    // #endif
+			try {
+				// 2. 上传至云存储
+				// 定义云端存储路径，建议按用户ID归档，防止文件名冲突
+				const cloudPath = `user-avatars/${userInfo.value._id}_${Date.now()}.jpg`;
+				
+				const uploadRes = await uniCloud.uploadFile({
+					filePath: tempFilePath,
+					cloudPath: cloudPath,
+					onUploadProgress: (progressEvent) => {
+						// 可以这里计算上传进度
+						// console.log(progressEvent);
+					}
+				});
 
-    // #ifdef MP-WEIXIN
-    uni.chooseMedia({
-        count: 1,
-        type: 'video',
-        sourceType: ['album', 'camera'],
-        success: (res) => {
-            console.log('小程序选择的文件:', res.tempFiles[0]);
-            const filePath = res.tempFiles[0].tempFilePath;
-            handleUpload(filePath);
-        },
-        fail: (err) => {
-            console.error('小程序选择失败:', err);
-            errorInfo.value = '选择文件失败';
-            uni.showToast({ title: '选择文件失败', icon: 'none' });
-        }
-    });
-    // #endif
+				// 上传成功后，uploadRes.fileID 就是云端图片的永久访问链接
+				const fileID = uploadRes.fileID;
+				console.log('上传成功，fileID:', fileID);
+
+				// 3. 调用云函数更新数据库
+				const updateRes = await uniCloud.callFunction({
+					name: 'user-update',
+					data: {
+						uid: userInfo.value._id,
+						avatarUrl: fileID
+					}
+				});
+
+				if (updateRes.result.code === 200) {
+					// 4. 更新前端状态和本地缓存
+					// 更新响应式数据，界面会自动刷新
+					userInfo.value.avatar = fileID;
+					
+					// 同步更新本地存储的完整用户信息
+					const currentStoredInfo = uni.getStorageSync('userInfo') || {};
+					currentStoredInfo.avatar = fileID;
+					uni.setStorageSync('userInfo', currentStoredInfo);
+
+					uni.showToast({ title: '头像更新成功', icon: 'success' });
+				} else {
+					uni.showToast({ title: updateRes.result.message || '更新失败', icon: 'none' });
+				}
+
+			} catch (err) {
+				console.error('头像处理失败:', err);
+				uni.showToast({ title: '网络错误，请稍后再试', icon: 'none' });
+			} finally {
+				// 无论成功失败，关闭加载提示
+				uploading.value = false;
+				uni.hideLoading();
+			}
+		},
+		fail: (err) => {
+			// 用户取消选择或选择失败
+			console.log('选择图片失败或取消', err);
+		}
+	});
 };
 
-// --- 统一的文件上传处理（所有平台都用 uni.uploadFile）---
-const handleUpload = (file, isH5File = false) => {
-    uni.showLoading({ title: '转写中...', mask: true });
-    isLoading.value = true;
-
-    // 构建上传参数
-    let uploadOptions = {
-        url: API_URL,
-        name: 'file',  // 后端参数名是 'file'
-        header: {
-            'X-API-Key': API_KEY
-        },
-        success: (res) => {
-            console.log('状态码:', res.statusCode);
-            console.log('原始响应:', res.data);
-            
-            let data;
-            try { 
-                data = JSON.parse(res.data); 
-                console.log('解析后数据:', data);
-            } catch(e) {
-                console.error('JSON解析失败:', e);
-                data = {};
-            }
-            
-            if (res.statusCode === 200 && data.transcription) {
-                transcribedText.value = data.transcription;
-                uni.showToast({ title: '转换成功', icon: 'success' });
-                errorInfo.value = '';
-            } else if (res.statusCode === 403) {
-                errorInfo.value = 'API密钥错误，请检查配置';
-                uni.showToast({ title: '密钥错误', icon: 'none' });
-            } else if (res.statusCode === 422) {
-                let errorMsg = '请求参数错误：未收到文件';
-                if (data && data.detail) {
-                    if (Array.isArray(data.detail)) {
-                        errorMsg = data.detail.map(e => e.msg || e).join(', ');
-                    } else if (typeof data.detail === 'object') {
-                        errorMsg = JSON.stringify(data.detail);
-                    } else {
-                        errorMsg = data.detail;
-                    }
-                }
-                errorInfo.value = errorMsg;
-                uni.showToast({ title: '上传失败', icon: 'none' });
-                console.error('422详细错误:', JSON.stringify(data));
-            } else {
-                errorInfo.value = data?.detail || `请求失败 (${res.statusCode})`;
-                uni.showToast({ title: '转换失败', icon: 'none' });
-            }
-        },
-        fail: (err) => {
-            console.error('网络错误:', err);
-            errorInfo.value = '网络连接失败，请检查网络';
-            uni.showToast({ title: '网络错误', icon: 'none' });
-        },
-        complete: () => {
-            uni.hideLoading();
-            isLoading.value = false;
-        }
-    };
-
-    // H5端需要特殊处理：使用 file 对象
-    if (isH5File && typeof file === 'object' && file instanceof File) {
-        // H5端使用 files 参数
-        uploadOptions.files = [{
-            name: 'file',
-            file: file
-        }];
-        // 删除 name 参数（H5端用 files 代替）
-        delete uploadOptions.name;
-    } else {
-        // App/小程序端使用 filePath
-        uploadOptions.filePath = file;
-    }
-
-    uni.uploadFile(uploadOptions);
+const handleLogout = () => {
+	uni.showModal({
+		title: '提示',
+		content: '确定要退出登录吗？',
+		success: function (res) {
+			if (res.confirm) {
+				uni.removeStorageSync('token');
+				uni.removeStorageSync('userInfo');
+				uni.reLaunch({ url: '/pages/login/login' });
+			}
+		}
+	});
 };
 </script>
 
-<template>
-    <view class="container">
-        <!-- 顶部标题 -->
-        <view class="header">
-            智学星河 - 语音转文字
-        </view>
-
-        <!-- 中间结果显示区域 -->
-        <view class="content">
-            <!-- 提示文字 -->
-            <view class="tip">
-                📁 支持 mp3, wav, mp4, m4a, aac 等格式
-            </view>
-            
-            <!-- 转写结果文本框 -->
-            <textarea 
-                class="result-textarea" 
-                v-model="transcribedText" 
-                placeholder="转写结果将显示在这里..."
-                :disabled="isLoading"
-            />
-            
-            <!-- 错误信息显示 -->
-            <view v-if="errorInfo" class="error-info">
-                ⚠️ {{ errorInfo }}
-            </view>
-        </view>
-
-        <!-- 底部操作区域 -->
-        <view class="footer">
-            <view 
-                class="upload-btn" 
-                :class="{ 'loading': isLoading }"
-                @click="chooseAudioFile"
-            >
-                <text v-if="!isLoading">📎 选择音频/视频文件</text>
-                <text v-else>⏳ 转写中，请稍候...</text>
-            </view>
-        </view>
-    </view>
-</template>
-
-<style scoped>
-.container {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background-color: #f5f7fa;
+<style lang="scss" scoped>
+.profile-container {
+	min-height: 100vh;
+	background-color: #f5f6fa;
 }
-
-.header {
-    padding: 40rpx 0;
-    text-align: center;
-    background-color: #ffffff;
-    font-weight: bold;
-    font-size: 40rpx;
-    color: #2c3e50;
-    border-bottom: 1rpx solid #e9ecef;
-    box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.02);
+.user-header {
+	display: flex;
+	align-items: center;
+	padding: 80rpx 40rpx;
+	background-color: #ffffff;
+	margin-bottom: 20rpx;
+	border-bottom: 1rpx solid #f0f0f0;
 }
-
-.content {
-    flex: 1;
-    padding: 32rpx;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
+.avatar {
+	width: 140rpx;
+	height: 140rpx;
+	border-radius: 70rpx; // 圆形头像
+	margin-right: 30rpx;
+	background-color: #eee;
+	border: 4rpx solid #fff;
+	box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.1); // 加上一点阴影更好看
 }
-
-.tip {
-    color: #6c757d;
-    font-size: 26rpx;
-    margin-bottom: 24rpx;
-    text-align: center;
-    background-color: #e9ecef;
-    padding: 16rpx 24rpx;
-    border-radius: 32rpx;
+.info {
+	display: flex;
+	flex-direction: column;
 }
-
-.result-textarea {
-    width: 100%;
-    flex: 1;
-    border: 1rpx solid #dee2e6;
-    border-radius: 20rpx;
-    padding: 28rpx;
-    font-size: 30rpx;
-    line-height: 1.6;
-    color: #212529;
-    background-color: #ffffff;
-    box-sizing: border-box;
-    font-family: inherit;
+.username {
+	font-size: 38rpx;
+	font-weight: bold;
+	color: #333;
 }
-
-.error-info {
-    margin-top: 24rpx;
-    color: #dc3545;
-    font-size: 26rpx;
-    text-align: center;
-    background-color: #ffe6e6;
-    padding: 16rpx;
-    border-radius: 16rpx;
+.action-list {
+	background-color: #ffffff;
+	margin-bottom: 40rpx;
 }
-
-.footer {
-    padding: 32rpx 32rpx 48rpx;
-    background-color: #ffffff;
-    border-top: 1rpx solid #e9ecef;
-    width: 100%;
-    box-sizing: border-box;
+.action-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 34rpx 40rpx;
+	border-bottom: 1rpx solid #f2f2f2;
+	font-size: 30rpx;
+	color: #333;
+	
+	&:active {
+		background-color: #fafafa; // 点击态
+	}
 }
-
-.upload-btn {
-    width: 100%;
-    padding: 32rpx;
-    background: linear-gradient(135deg, #007aff 0%, #0056b3 100%);
-    color: #ffffff;
-    font-size: 34rpx;
-    font-weight: 500;
-    text-align: center;
-    border-radius: 60rpx;
-    transition: all 0.3s;
-    box-shadow: 0 4rpx 12rpx rgba(0,122,255,0.3);
+.action-item:last-child {
+	border-bottom: none;
 }
-
-.upload-btn:active {
-    transform: scale(0.98);
-    box-shadow: 0 2rpx 6rpx rgba(0,122,255,0.2);
+.right-area {
+	display: flex;
+	align-items: center;
 }
-
-.upload-btn.loading {
-    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-    pointer-events: none;
-    opacity: 0.8;
+.loading-icon {
+	width: 36rpx;
+	height: 36rpx;
+	margin-right: 10rpx;
+}
+.arrow {
+	color: #ccc;
+	font-weight: bold;
+	margin-left: 10rpx;
+}
+.logout-btn-wrap {
+	padding: 0 40rpx;
+}
+.logout-btn {
+	background-color: #ff4d4f;
+	color: #ffffff;
+	border-radius: 44rpx;
+	font-size: 32rpx;
+	height: 88rpx;
+	line-height: 88rpx;
+	border: none;
+	
+	&:after {
+		border: none;
+	}
+	
+	&:active {
+		opacity: 0.8;
+	}
 }
 </style>
