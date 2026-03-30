@@ -1,0 +1,7 @@
+{
+  "name": "user-register",
+  "dependencies": {},
+  "extensions": {
+    "uni-cloud-jql": {}
+  }
+}
