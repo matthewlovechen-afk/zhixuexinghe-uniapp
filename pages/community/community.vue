@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <template>
     <view class="community-container">
         <web-view src="https://www.xingqiushequ.tech/"></web-view>
@@ -78,20 +77,3 @@ onBackPress((options) => {
     height: 100vh;
 }
 </style>
-=======
-<template>
-  <view class="community-container">
-    <text>社区广场</text>
-  </view>
-</template>
-
-<script setup>
-// 暂时留空，后续补逻辑
-</script>
-
-<style scoped>
-.community-container {
-  padding: 20rpx;
-}
-</style>
->>>>>>> 28b5af5 (修复登录跳转和tabBar配置，登录页设为首页)
