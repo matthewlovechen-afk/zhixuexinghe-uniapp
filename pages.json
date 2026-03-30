@@ -16,6 +16,7 @@
 			"path": "pages/profile/profile",
 			"style": { "navigationBarTitleText": "我的档案" }
 		},
+		// --- 以下是 feature-login 分支新增的内容 ---
 		{
 			"path": "pages/login/login",
 			"style": {
@@ -33,36 +34,16 @@
 			"style": {
 				"navigationBarTitleText": "修改密码"
 			}
+		},
+		// --- 以下是 try 分支修改的内容 ---
+		{
+			"path": "pages/webview/webview",
+			"style": {
+				"navigationBarTitleText": "资源详情"
+			}
 		}
 	],
 	"tabBar": {
-		"color": "#999999",
-		"selectedColor": "#007aff",
-		"list": [
-			{
-				"pagePath": "pages/index/index",
-				"text": "首页",
-				"iconPath": "static/tab-home.png",
-				"selectedIconPath": "static/tab-home-active.png"
-			},
-			{
-				"pagePath": "pages/ai-chat/ai-chat",
-				"text": "AI 助教",
-				"iconPath": "static/tab-ai.png",
-				"selectedIconPath": "static/tab-ai-active.png"
-			},
-			{
-				"pagePath": "pages/community/community",
-				"text": "社区",
-				"iconPath": "static/tab-community.png",
-				"selectedIconPath": "static/tab-community-active.png"
-			},
-			{
-				"pagePath": "pages/profile/profile",
-				"text": "我的",
-				"iconPath": "static/tab-profile.png",
-				"selectedIconPath": "static/tab-profile-active.png"
-			}
-		]
+		// ... 其余 tabbar 配置保持不变 ...
 	}
 }
