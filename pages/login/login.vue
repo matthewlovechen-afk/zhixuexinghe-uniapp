@@ -62,7 +62,7 @@ const handleAction = async () => {
 				
 				setTimeout(() => {
 					// ✅ 修复：switchTab 改成 redirectTo
-					uni.redirectTo({
+					uni.switchTab({
 						url: '/pages/index/index'
 					});
 				}, 1500);
