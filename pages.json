@@ -1,5 +1,6 @@
 {
 	"pages": [
+<<<<<<< HEAD
 		// 👇 第一个：登录页（启动页）
 		{
 			"path": "pages/login/login",
@@ -32,27 +33,81 @@
 			"style": {
 				"navigationBarTitleText": "我的档案"
 			}
+=======
+		{
+			"path": "pages/login/login",
+			"style": { "navigationBarTitleText": "登录" }
+		},
+		{
+			"path": "pages/index/index",
+			"style": { "navigationBarTitleText": "智学星河" }
+		},
+		{
+			"path": "pages/ai-chat/ai-chat",
+			"style": { "navigationBarTitleText": "AI 助教", "navigationStyle": "custom" } 
+		},
+		{
+			"path": "pages/community/community",
+			"style": { "navigationBarTitleText": "社区广场" }
+		},
+		{
+			"path": "pages/profile/profile",
+			"style": { "navigationBarTitleText": "我的档案" }
+>>>>>>> 28b5af5 (修复登录跳转和tabBar配置，登录页设为首页)
 		},
 		{
 			"path": "pages/profile/edit-username/edit-username",
-			"style": {
-				"navigationBarTitleText": "修改用户名"
-			}
+			"style": { "navigationBarTitleText": "修改用户名" }
 		},
 		{
 			"path": "pages/profile/edit-password/edit-password",
-			"style": {
-				"navigationBarTitleText": "修改密码"
-			}
+			"style": { "navigationBarTitleText": "修改密码" }
 		},
 		{
 			"path": "pages/webview/webview",
-			"style": {
-				"navigationBarTitleText": "资源详情"
-			}
+			"style": { "navigationBarTitleText": "资源详情" }
 		}
 	],
 	"tabBar": {
+<<<<<<< HEAD
 		// 你原来的 tabBar 配置保持不变
+=======
+		"color": "#7A7E83",
+		"selectedColor": "#007aff",
+		"borderStyle": "black",
+		"backgroundColor": "#ffffff",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "首页",
+				"iconPath": "static/tab/home.png",
+				"selectedIconPath": "static/tab/home-active.png"
+			},
+			{
+				"pagePath": "pages/ai-chat/ai-chat",
+				"text": "AI助教",
+				"iconPath": "static/tab/ai.png",
+				"selectedIconPath": "static/tab/ai-active.png"
+			},
+			{
+				"pagePath": "pages/community/community",
+				"text": "社区",
+				"iconPath": "static/tab/community.png",
+				"selectedIconPath": "static/tab/community-active.png"
+			},
+			{
+				"pagePath": "pages/profile/profile",
+				"text": "我的",
+				"iconPath": "static/tab/profile.png",
+				"selectedIconPath": "static/tab/profile-active.png"
+			}
+		]
+	},
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "智学星河",
+		"navigationBarBackgroundColor": "#F8F8F8",
+		"backgroundColor": "#F8F8F8"
+>>>>>>> 28b5af5 (修复登录跳转和tabBar配置，登录页设为首页)
 	}
 }
