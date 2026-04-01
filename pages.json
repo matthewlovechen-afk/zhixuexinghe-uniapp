@@ -31,6 +31,12 @@
 		{
 			"path": "pages/webview/webview",
 			"style": { "navigationBarTitleText": "资源详情" }
+		},
+		{
+			"path": "pages/profile/personal-info/personal-info",
+			"style": {
+				"navigationBarTitleText": "个人信息"
+			}
 		}
 	],
 	"tabBar": {
