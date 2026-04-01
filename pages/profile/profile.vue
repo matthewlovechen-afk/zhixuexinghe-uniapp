@@ -13,7 +13,7 @@
 
 		<view class="action-list">
 			<view class="action-item" @click="goTo('personal-info/personal-info')">
-				<text>个人资料</text>
+				<text>个人信息</text>
 				<text class="arrow">></text>
 			</view>
             
