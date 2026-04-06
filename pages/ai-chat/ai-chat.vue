@@ -31,8 +31,11 @@
         </view>
 
         <!-- 语音按钮 -->
-        <view class="icon-btn" @click="chooseAudioFile" :class="{ 'loading': isUploading }">
-          <text class="mic-icon">📎</text>
+        <view class="icon-btn" 
+              @touchstart="startRealtimeASR" 
+              @touchend="stopRealtimeASR" 
+              :class="{ 'loading': isRecording }">
+          <text class="mic-icon">🎤</text>
         </view>
 
         <input 
@@ -56,6 +59,7 @@ import { ref, reactive, nextTick } from 'vue';
 const inputText = ref('');
 const scrollIntoView = ref('');
 const isUploading = ref(false);
+const isRecording = ref(false);
 
 const messageList = reactive([
   {
@@ -70,8 +74,9 @@ const messageList = reactive([
 // 注意：这里去掉了末尾的斜杠，保持与 Swagger 文档一致
 const IMAGE_RECOGNITION_API_URL = 'http://101.43.110.90:8080/ocr';
 
-// 2. 语音识别服务 (RTASR) - 新地址 (用于实时语音)
-const RTASR_API_URL = 'http://101.43.110.90/api/asr';
+// 2. 语音识别服务 (RTASR) 
+const RTASR_API_URL = 'http://101.43.110.90/api/asr'; // 预留 HTTP 接口
+const RTASR_WS_URL = 'ws://101.43.110.90:8000/api/v1/asr/ws/realtime?token=12345678'; // 实时流式 WebSocket 接口
 
 // 3. Whisper 服务 (用于音频文件转写) - 旧地址
 const WHISPER_API_URL = 'http://114.55.97.51:8000/transcribe/';
@@ -79,6 +84,82 @@ const WHISPER_API_KEY = 'jackeylove';
 
 // 4. DeepSeek 服务 (AI 回复) - 旧地址
 const DEEPSEEK_API_URL = 'http://116.62.128.164:5000/chat';
+
+// ==================== 实时语音识别 (RTASR) 逻辑 ====================
+let socketTask = null;
+const recorderManager = uni.getRecorderManager();
+
+// 1. 监听录音切片数据并实时发送给后端
+recorderManager.onFrameRecorded((res) => {
+  const { frameBuffer } = res;
+  if (socketTask) {
+    socketTask.send({ data: frameBuffer });
+  }
+});
+
+// 2. 监听录音结束
+recorderManager.onStop((res) => {
+  if (socketTask) {
+    // 按照后端协议，发送结束信号
+    socketTask.send({ data: JSON.stringify({ action: "end" }) });
+  }
+  isRecording.value = false;
+  uni.hideToast();
+});
+
+// 3. 开始录音 (绑定在麦克风按钮的 @touchstart)
+const startRealtimeASR = () => {
+  if (isRecording.value) return;
+  isRecording.value = true;
+  uni.showToast({ title: '正在聆听...', icon: 'none', duration: 60000 });
+
+  // 建立 WebSocket 连接
+  socketTask = uni.connectSocket({
+    url: RTASR_WS_URL,
+    success: () => console.log('正在连接 ASR 服务...')
+  });
+
+  socketTask.onOpen(() => {
+    console.log('ASR 服务连接成功，启动录音机');
+    // 启动录音机：参数配置 PCM/16000Hz/单声道
+    recorderManager.start({
+      sampleRate: 16000,
+      numberOfChannels: 1,
+      format: 'pcm',
+      frameSize: 1 // 触发 onFrameRecorded 流式传输
+    });
+  });
+
+  // 监听后端增量返回的识别文本
+  socketTask.onMessage((res) => {
+    try {
+      const data = JSON.parse(res.data);
+      if (data.action === 'result' && data.text) {
+        // 实时将识别结果填充到输入框
+        inputText.value = data.text;
+      } else if (data.action === 'done' || data.action === 'error') {
+        if (data.action === 'error') console.error('ASR报错:', data.detail);
+        socketTask.close();
+        socketTask = null;
+      }
+    } catch (e) {
+      console.error('解析 ASR 响应失败', e);
+    }
+  });
+
+  socketTask.onError((err) => {
+    console.error('WebSocket 连接失败:', err);
+    uni.showToast({ title: '语音服务不可用', icon: 'none' });
+    recorderManager.stop();
+    isRecording.value = false;
+  });
+};
+
+// 4. 停止录音 (绑定在麦克风按钮的 @touchend)
+const stopRealtimeASR = () => {
+  if (!isRecording.value) return;
+  recorderManager.stop(); // 触发 onStop
+};
 
 // ==================== 图片识别逻辑 ====================
 const chooseImage = () => {
