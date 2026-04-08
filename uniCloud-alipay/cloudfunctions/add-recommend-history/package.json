@@ -1,0 +1,7 @@
+{
+  "name": "add-recommend-history",
+  "dependencies": {},
+  "extensions": {
+    "uni-cloud-jql": {}
+  }
+}

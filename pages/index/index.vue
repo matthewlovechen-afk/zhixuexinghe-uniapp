@@ -66,7 +66,6 @@ export default {
     }
   },
   methods: {
-    // ✅ 正确的跳转方法
     openLink(url) {
       const encodedUrl = encodeURIComponent(url);
       uni.navigateTo({
@@ -80,6 +79,33 @@ export default {
 
     onTopKChange(e) {
       this.top_k = this.topKList[e.detail.value]
+    },
+
+    // 新增：静默保存用户推荐历史的独立方法
+    async saveActionLog() {
+      // 获取当前登录用户的 ID。
+      // 这里的 'userInfo' 需要根据你实际登录页面 setStorageSync 时用的 key 来决定
+      const userInfo = uni.getStorageSync('userInfo'); 
+      
+      if (!userInfo || !userInfo._id) {
+        console.log('用户未登录，跳过行为记录');
+        return; 
+      }
+
+      try {
+        await uniCloud.callFunction({
+          name: 'add-recommend-history',
+          data: {
+            user_id: userInfo._id, // 核心：绑定到当前用户
+            grade: this.grade,
+            subject: this.subject,
+            top_k: this.top_k
+          }
+        });
+        console.log('行为记录已成功存入数据库');
+      } catch (e) {
+        console.error('行为记录存储失败:', e);
+      }
     },
 
     async getRecommend() {
@@ -106,6 +132,10 @@ export default {
         if (data.status === 'success') {
           this.list = data.recommendations
           this.showResult = true
+          
+          // ✅ 核心改动：在成功获取推荐后，异步调用存储历史记录的方法
+          this.saveActionLog();
+
         } else {
           uni.showToast({ title: data.error || '获取失败', icon: 'none' })
         }
