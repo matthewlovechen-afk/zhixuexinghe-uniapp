@@ -1,6 +1,6 @@
 <template>
     <view class="community-container">
-        <web-view src="https://www.xingqiushequ.tech/"></web-view>
+        <web-view src="129.146.117.41"></web-view>
     </view>
 </template>
 
