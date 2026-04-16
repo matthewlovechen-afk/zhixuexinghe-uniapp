@@ -1,6 +1,6 @@
 <template>
     <view class="community-container">
-        <web-view src="129.146.117.41"></web-view>
+        <web-view src="http://129.146.117.41"></web-view>
     </view>
 </template>
 
