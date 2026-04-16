@@ -25,14 +25,25 @@
 
     <view class="input-area">
       <view class="input-wrapper">
-        <!-- 图片按钮 -->
-        <view class="icon-btn" @click="chooseImage">
-          <text class="icon">🖼️</text>
+        <!-- 加号菜单按钮 -->
+        <view class="plus-menu-btn" @click="toggleMenu">
+          <text class="plus-icon" :class="{ 'rotate': showMenu }">+</text>
         </view>
 
-        <!-- 语音按钮 -->
-        <view class="icon-btn" @click="chooseAudioFile" :class="{ 'loading': isUploading }">
-          <text class="mic-icon">📎</text>
+        <!-- 下拉菜单 -->
+        <view class="menu-dropdown" v-if="showMenu">
+          <view class="menu-item" @click="handleRealtimeSpeech">
+            <image src="/static/realtime-speech.png" class="menu-icon"></image>
+            <text>实时语音</text>
+          </view>
+          <view class="menu-item" @click="chooseVideoOrAudio">
+            <image src="/static/video-text.png" class="menu-icon"></image>
+            <text>视频转文字</text>
+          </view>
+          <view class="menu-item" @click="chooseImage">
+            <image src="/static/image-text.png" class="menu-icon"></image>
+            <text>图片识别</text>
+          </view>
         </view>
 
         <input 
@@ -46,6 +57,14 @@
           <text>发送</text>
         </view>
       </view>
+
+      <!-- 实时语音录制状态显示 -->
+      <view v-if="isRecording" class="recording-status">
+        <text>{{ recordingTime }}秒 - 正在录音中...</text>
+        <view class="stop-btn" @click="stopRealTimeSpeech">
+          <text>停止</text>
+        </view>
+      </view>
     </view>
   </view>
 </template>
@@ -56,32 +75,206 @@ import { ref, reactive, nextTick } from 'vue';
 const inputText = ref('');
 const scrollIntoView = ref('');
 const isUploading = ref(false);
+const showMenu = ref(false);
+const isRecording = ref(false);
+const recordingTime = ref(0);
+
+let recorder = null;
+let recordingTimer = null;
+let wsInstance = null;
+let recordingFrames = [];
 
 const messageList = reactive([
   {
     role: 'assistant',
-    content: '你好！我是智学星河助手。你可以点击回形针上传音频，或点击图片图标上传图片进行识别。',
+    content: '你好！我是智学星河助手。你可以点击加号上传图片、视频或进行实时语音识别。',
     loading: false
   }
 ]);
 
 // ==================== API 配置 ====================
-// 1. 图片识别服务 (PaddleOCR) - 新地址
-// 注意：这里去掉了末尾的斜杠，保持与 Swagger 文档一致
+// 1. 图片识别服务 (PaddleOCR)
 const IMAGE_RECOGNITION_API_URL = 'http://101.43.110.90:8080/ocr';
 
-// 2. 语音识别服务 (RTASR) - 新地址 (用于实时语音)
-const RTASR_API_URL = 'http://101.43.110.90/api/asr';
+// 2. 实时语音识别 WebSocket (FastAPI 包装的科大讯飞)
+const REALTIME_SPEECH_WS_URL = 'ws://101.43.110.90:8000/api/v1/asr/ws/realtime?token=12345678';
 
-// 3. Whisper 服务 (用于音频文件转写) - 旧地址
+// 3. Whisper 服务 (用于音频文件转写)
 const WHISPER_API_URL = 'http://114.55.97.51:8000/transcribe/';
 const WHISPER_API_KEY = 'jackeylove';
 
-// 4. DeepSeek 服务 (AI 回复) - 旧地址
+// 4. DeepSeek 服务 (AI 回复)
 const DEEPSEEK_API_URL = 'http://116.62.128.164:5000/chat';
+
+// ==================== 菜单控制 ====================
+const toggleMenu = () => {
+  showMenu.value = !showMenu.value;
+};
+
+const closeMenu = () => {
+  showMenu.value = false;
+};
+
+// ==================== 实时语音识别 (WebSocket) ====================
+const handleRealtimeSpeech = async () => {
+  closeMenu();
+  
+  // 请求录音权限
+  try {
+    const res = await uni.requestRecordPermission();
+    if (res.state !== 'granted') {
+      uni.showToast({ title: '需要录音权限', icon: 'none' });
+      return;
+    }
+  } catch (err) {
+    console.error('权限请求失败:', err);
+  }
+
+  if (isRecording.value) {
+    stopRealTimeSpeech();
+    return;
+  }
+
+  // 初始化录音
+  const recorderManager = uni.getRecorderManager();
+  recorder = recorderManager;
+
+  recorder.onStart(() => {
+    isRecording.value = true;
+    recordingTime.value = 0;
+    recordingFrames = [];
+    
+    // 启动计时器
+    recordingTimer = setInterval(() => {
+      recordingTime.value++;
+      if (recordingTime.value > 300) {
+        stopRealTimeSpeech();
+      }
+    }, 1000);
+
+    uni.showToast({ title: '开始录音...', icon: 'none', duration: 1000 });
+  });
+
+  recorder.onFrame((res) => {
+    if (res.frameBuffer && wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+      wsInstance.send(res.frameBuffer);
+    }
+  });
+
+  recorder.onStop((res) => {
+    isRecording.value = false;
+    if (recordingTimer) {
+      clearInterval(recordingTimer);
+    }
+  });
+
+  recorder.onError((err) => {
+    isRecording.value = false;
+    console.error('录音错误:', err);
+    uni.showToast({ title: '录音出错', icon: 'none' });
+  });
+
+  // 连接 WebSocket
+  connectWebSocket();
+
+  // 开始录音 (16kHz, 单声道, 16bit)
+  recorder.start({
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    encodeBitRate: 128000,
+    format: 'pcm'
+  });
+};
+
+const connectWebSocket = () => {
+  try {
+    wsInstance = new WebSocket(REALTIME_SPEECH_WS_URL);
+
+    wsInstance.onopen = () => {
+      console.log('WebSocket 连接成功');
+    };
+
+    wsInstance.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('服务器消息:', data);
+
+        if (data.action === 'ready') {
+          // 服务器已就绪
+          uni.showToast({ title: '服务器就绪', icon: 'none', duration: 500 });
+        } else if (data.action === 'started') {
+          // 识别已开始
+          console.log('识别开始');
+        } else if (data.action === 'result' && data.text) {
+          // 返回增量识别结果
+          const recognizedText = data.text || '';
+          if (recognizedText) {
+            inputText.value = recognizedText;
+          }
+        } else if (data.action === 'ack') {
+          // 服务器确认
+          console.log('服务器 ACK');
+        } else if (data.action === 'done') {
+          // 识别完成
+          stopRealTimeSpeech();
+          uni.showToast({ title: '识别完成', icon: 'success', duration: 1000 });
+        } else if (data.action === 'error') {
+          // 错误信息
+          console.error('识别错误:', data.detail);
+          uni.showToast({ title: `错误: ${data.detail}`, icon: 'none' });
+          stopRealTimeSpeech();
+        }
+      } catch (e) {
+        console.error('解析 WebSocket 消息失败:', e);
+      }
+    };
+
+    wsInstance.onerror = (err) => {
+      console.error('WebSocket 错误:', err);
+      uni.showToast({ title: 'WebSocket 连接失败', icon: 'none' });
+      stopRealTimeSpeech();
+    };
+
+    wsInstance.onclose = () => {
+      console.log('WebSocket 连接已关闭');
+    };
+  } catch (e) {
+    console.error('WebSocket 连接异常:', e);
+    uni.showToast({ title: '无法连接服务器', icon: 'none' });
+  }
+};
+
+const stopRealTimeSpeech = () => {
+  isRecording.value = false;
+  
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+  }
+
+  if (recorder) {
+    try {
+      recorder.stop();
+    } catch (e) {
+      console.error('停止录音失败:', e);
+    }
+  }
+
+  if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+    try {
+      // 发送结束信号
+      wsInstance.send(JSON.stringify({ action: 'end' }));
+      wsInstance.close();
+    } catch (e) {
+      console.error('关闭 WebSocket 失败:', e);
+    }
+    wsInstance = null;
+  }
+};
 
 // ==================== 图片识别逻辑 ====================
 const chooseImage = () => {
+  closeMenu();
+  
   if (isUploading.value) return;
 
   uni.chooseImage({
@@ -105,12 +298,8 @@ const recognizeImage = (filePath) => {
   uni.uploadFile({
     url: IMAGE_RECOGNITION_API_URL,
     filePath: filePath,
-    // 关键修改：根据 Swagger 文档，参数名应为 'image'
     name: 'image',
-    // 关键修改：删除手动设置的 Content-Type，让框架自动处理
-    // header: { 'Content-Type': 'multipart/form-data' },
     success: (res) => {
-      // 关键修改：增加状态码检查
       if (res.statusCode !== 200) {
         console.error('图片识别服务端错误:', res.statusCode, res.data);
         uni.showToast({ title: `服务错误: ${res.statusCode}`, icon: 'none' });
@@ -119,7 +308,6 @@ const recognizeImage = (filePath) => {
 
       try {
         let data = JSON.parse(res.data);
-        // 关键修改：根据 Swagger 截图，返回字段为 "text"
         if (data.text) {
           inputText.value = data.text;
           uni.showToast({ title: '识别成功', icon: 'success' });
@@ -142,8 +330,10 @@ const recognizeImage = (filePath) => {
   });
 };
 
-// ==================== 音频文件转写逻辑 (Whisper) ====================
-const chooseAudioFile = () => {
+// ==================== 视频转文字逻辑 ====================
+const chooseVideoOrAudio = () => {
+  closeMenu();
+  
   if (isUploading.value) return;
 
   // #ifdef H5
@@ -160,7 +350,7 @@ const chooseAudioFile = () => {
   // #ifdef APP-PLUS || MP-WEIXIN
   uni.chooseMedia({
     count: 1,
-    type: ['video', 'image'],
+    type: ['video'],
     success: (res) => {
       uploadAudio(res.tempFiles[0].tempFilePath);
     }
@@ -216,6 +406,8 @@ const sendMessage = async () => {
   const txt = inputText.value.trim();
   if (!txt) return;
 
+  closeMenu();
+
   messageList.push({
     role: 'user',
     content: txt,
@@ -255,7 +447,7 @@ const scrollToBottom = () => {
 </script>
 
 <style scoped>
-/* 保持原有样式不变 */
+/* 保持原有样式，新增菜单相关样式 */
 .chat-container {
   display: flex;
   flex-direction: column;
@@ -334,9 +526,11 @@ const scrollToBottom = () => {
   background-color: #f0f2f5;
   border-radius: 25px;
   padding: 5px 10px;
+  position: relative;
 }
 
-.icon-btn {
+/* 加号菜单按钮 */
+.plus-menu-btn {
   width: 40px;
   height: 40px;
   display: flex;
@@ -344,22 +538,118 @@ const scrollToBottom = () => {
   justify-content: center;
   margin-right: 5px;
   border-radius: 50%;
-  background-color: #e0e0e0;
+  background-color: #007AFF;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+}
+
+.plus-menu-btn:active {
+  background-color: #0051BA;
+}
+
+.plus-icon {
+  font-size: 28px;
+  color: white;
+  font-weight: bold;
+  transition: transform 0.3s ease;
+}
+
+.plus-icon.rotate {
+  transform: rotate(45deg);
+}
+
+/* 下拉菜单 */
+.menu-dropdown {
+  position: absolute;
+  bottom: 60px;
+  left: 10px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
   transition: background-color 0.2s;
 }
 
-.icon-btn:active {
-  background-color: #d0d0d0;
+.menu-item:last-child {
+  border-bottom: none;
 }
 
-.icon-btn.loading {
-  background-color: #b0b0b0;
+.menu-item:active {
+  background-color: #f5f5f5;
 }
 
-.icon, .mic-icon {
-  font-size: 20px;
+.menu-icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 6px;
 }
 
+.menu-item text {
+  font-size: 12px;
+  color: #333;
+  text-align: center;
+}
+
+/* 录音状态显示 */
+.recording-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #fff3cd;
+  border-radius: 8px;
+  padding: 10px 15px;
+  margin-top: 10px;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.recording-status text {
+  color: #856404;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.stop-btn {
+  background-color: #dc3545;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.stop-btn:active {
+  background-color: #c82333;
+}
+
+/* 文本输入框 */
 .text-input {
   flex: 1;
   height: 40px;
@@ -369,6 +659,7 @@ const scrollToBottom = () => {
   border: none;
 }
 
+/* 发送按钮 */
 .send-btn {
   margin-left: 10px;
   padding: 8px 15px;
@@ -376,6 +667,11 @@ const scrollToBottom = () => {
   color: white;
   border-radius: 20px;
   font-size: 14px;
+  flex-shrink: 0;
+}
+
+.send-btn:active {
+  background-color: #0051BA;
 }
 
 .send-btn.disabled {
