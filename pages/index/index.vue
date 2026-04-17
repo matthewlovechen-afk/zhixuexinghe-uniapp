@@ -6,14 +6,19 @@
     </view>
 
     <view class="tabs">
-      <view class="tab-btn" :class="{ active: currentTab === 'active' }" @click="switchTab('active')">主动推荐</view>
-      <view class="tab-btn" :class="{ active: currentTab === 'auto' }" @click="switchTab('auto')">自动推荐</view>
-      <view class="tab-btn" :class="{ active: currentTab === 'hybrid' }" @click="switchTab('hybrid')">混合推荐</view>
+      <view class="tab-btn" :class="{ active: currentTab === 'active' }" @click="switchTab('active')">探索新内容</view>
+      <view class="tab-btn" :class="{ active: currentTab === 'auto' }" @click="switchTab('auto')">猜你喜欢</view>
+      <view class="tab-btn" :class="{ active: currentTab === 'hybrid' }" @click="switchTab('hybrid')">智能推荐</view>
     </view>
 
+    <!-- 探索新内容（原主动推荐） -->
     <view v-if="currentTab === 'active'" class="card">
-      <view class="card-title">主动推荐</view>
-      <view class="info-note">说明：选择年级和学科，系统会基于内容(CNN)为你推荐学习资源</view>
+      <view class="card-title">探索新内容</view>
+      <view class="info-note">
+        <text v-if="currentUser">当前用户：{{ currentUser.username || currentUser.nickname || '用户' }}</text>
+        <text v-else>请先登录</text>
+      </view>
+      <view class="info-note">说明：根据你选择的年级和学科，推荐最匹配的学习资源（适合探索新领域）</view>
       <view class="form-group">
         <text class="label">年级</text>
         <picker @change="onGradeChange" :range="gradeList">
@@ -33,37 +38,41 @@
       <button class="submit-btn" @click="getActiveRecommend">开始推荐</button>
     </view>
 
+    <!-- 猜你喜欢（原自动推荐） -->
     <view v-if="currentTab === 'auto'" class="card">
-      <view class="card-title">自动推荐</view>
-      <view class="info-note">说明：输入用户ID，系统会根据你的学习历史，通过协同过滤算法推荐相似用户喜欢的资源</view>
-      <view class="form-group">
-        <text class="label">用户ID</text>
-        <input type="number" v-model="autoUserId" class="input" placeholder="例如: 1" />
+      <view class="card-title">猜你喜欢</view>
+      <view class="info-note">
+        <text v-if="currentUser">当前用户：{{ currentUser.username || currentUser.nickname || '用户' }}</text>
+        <text v-else>请先登录</text>
       </view>
+      <view class="info-note">说明：根据你的历史学习记录，智能推荐你可能感兴趣的内容（适合日常使用）</view>
       <view class="form-group">
         <text class="label">推荐数量</text>
         <picker @change="onTopKChange($event, 'auto')" :range="topKList">
           <view class="picker">{{ autoTopK }}条</view>
         </picker>
       </view>
-      <button class="submit-btn" @click="getAutoRecommend">开始推荐</button>
+      <button class="submit-btn" @click="getAutoRecommend" :disabled="!currentUser">
+        {{ currentUser ? '开始推荐' : '请先登录' }}
+      </button>
     </view>
 
+    <!-- 智能推荐（原混合推荐） -->
     <view v-if="currentTab === 'hybrid'" class="card">
-      <view class="card-title">混合推荐</view>
-      <view class="info-note">说明：优先使用协同过滤（基于用户历史），如果没有历史数据则降级到基于内容推荐</view>
-      <view class="form-group">
-        <text class="label">用户ID (可选)</text>
-        <input type="number" v-model="hybridUserId" class="input" placeholder="例如: 1" />
+      <view class="card-title">智能推荐</view>
+      <view class="info-note">
+        <text v-if="currentUser">当前用户：{{ currentUser.username || currentUser.nickname || '用户' }}</text>
+        <text v-else>请先登录</text>
       </view>
+      <view class="info-note">说明：结合你的学习历史和当前兴趣，综合推荐最优资源（推荐使用）</view>
       <view class="form-group">
-        <text class="label">年级 (降级备用)</text>
+        <text class="label">年级</text>
         <picker @change="onHybridGradeChange" :range="gradeList">
           <view class="picker">{{ hybridGrade }}</view>
         </picker>
       </view>
       <view class="form-group">
-        <text class="label">学科 (降级备用)</text>
+        <text class="label">学科</text>
         <input v-model="hybridSubject" class="input" placeholder="例如: 数学" />
       </view>
       <view class="form-group">
@@ -72,7 +81,9 @@
           <view class="picker">{{ hybridTopK }}条</view>
         </picker>
       </view>
-      <button class="submit-btn" @click="getHybridRecommend">开始推荐</button>
+      <button class="submit-btn" @click="getHybridRecommend" :disabled="!currentUser">
+        {{ currentUser ? '开始推荐' : '请先登录' }}
+      </button>
     </view>
 
     <view v-if="showResult" class="card result-card">
@@ -97,7 +108,7 @@
             <text v-if="item.score" class="tag tag-score">匹配度 {{ Math.round(item.score * 100) }}%</text>
           </view>
           <view class="item-desc">学科: {{ item.subject || '暂无' }}</view>
-          <view class="result-link" @click="openLink(item.url)">点击查看详情 →</view>
+          <view class="result-link" @click="openLink(item.url)">点击查看详情</view>
         </view>
         
         <view class="stats">
@@ -124,10 +135,8 @@ export default {
       activeSubject: '数学',
       activeTopK: '10',
 
-      autoUserId: '1',
       autoTopK: '10',
 
-      hybridUserId: '1',
       hybridGrade: '初中',
       hybridSubject: '数学',
       hybridTopK: '10',
@@ -136,17 +145,34 @@ export default {
       showResult: false,
       errorMsg: '',
       list: [],
-      resultData: {}
+      resultData: {},
+      
+      currentUser: null
     }
   },
+  onLoad() {
+    this.checkLoginStatus();
+  },
+  onShow() {
+    this.checkLoginStatus();
+  },
   methods: {
-    // 切换选项卡
+    checkLoginStatus() {
+      const userInfo = uni.getStorageSync('userInfo');
+      if (userInfo && userInfo._id) {
+        this.currentUser = userInfo;
+        console.log('当前登录用户ID:', userInfo._id);
+      } else {
+        this.currentUser = null;
+        console.log('用户未登录');
+      }
+    },
+
     switchTab(tab) {
       this.currentTab = tab;
       this.showResult = false;
     },
 
-    // 各种表单选择事件
     onGradeChange(e) {
       this.activeGrade = this.gradeList[e.detail.value];
     },
@@ -160,7 +186,6 @@ export default {
       if (type === 'hybrid') this.hybridTopK = val;
     },
 
-    // 打开链接
     openLink(url) {
       if(!url) return;
       const encodedUrl = encodeURIComponent(url);
@@ -169,7 +194,6 @@ export default {
       });
     },
     
-    // 核心逻辑保留：静默保存用户推荐历史，现专门用于主动推荐
     async saveActionLog(type, params) {
         const userInfo = uni.getStorageSync('userInfo'); 
         if (!userInfo || !userInfo._id) {
@@ -181,12 +205,12 @@ export default {
           await uniCloud.callFunction({
             name: 'add-recommend-history',
             data: {
-              user_id: userInfo._id,               // 当前登录用户的ID
-              recommend_type: type,                // 推荐类型: 'active' | 'auto' | 'hybrid'
-              grade: params.grade || '',           // 年级 (如果有)
-              subject: params.subject || '',       // 学科 (如果有)
-              top_k: params.top_k || 10,           // 推荐数量
-              target_user_id: params.target_user_id || '' // 目标查询用户ID (自动/混合推荐用到)
+              user_id: userInfo._id,
+              recommend_type: type,
+              grade: params.grade || '',
+              subject: params.subject || '',
+              top_k: params.top_k || 10,
+              target_user_id: params.target_user_id || ''
             }
           });
           console.log(`[${type}] 行为记录已成功存入数据库`);
@@ -195,110 +219,117 @@ export default {
         }
       },
     
-      // 1. 主动推荐请求
-      async getActiveRecommend() {
-        if (!this.activeSubject.trim()) {
-          uni.showToast({ title: '请输入学科', icon: 'none' });
-          return;
-        }
-        this.showLoadingState();
-    
-        try {
-          const res = await uni.request({
-            url: `http://116.62.128.164:8080/recommend/active`,
-            method: 'GET',
-            data: {
-              grade: this.activeGrade,
-              subject: this.activeSubject,
-              top_k: this.activeTopK
-            }
-          });
-    
-          this.handleResponse(res.data);
-          
-          // 🌟 记录主动推荐
-          if (res.data.status === 'success') {
-            this.saveActionLog('active', {
-              grade: this.activeGrade,
-              subject: this.activeSubject,
-              top_k: this.activeTopK
-            });
-          }
-        } catch (err) {
-          this.errorMsg = '网络错误: 请求失败';
-        }
-        this.loading = false;
-      },
-    
-      // 2. 自动推荐请求
-      async getAutoRecommend() {
-        if (!this.autoUserId) {
-          uni.showToast({ title: '请输入用户ID', icon: 'none' });
-          return;
-        }
-        this.showLoadingState();
-    
-        try {
-          const res = await uni.request({
-            url: `http://116.62.128.164:8080/recommend/auto`,
-            method: 'GET',
-            data: {
-              user_id: this.autoUserId,
-              top_k: this.autoTopK
-            }
-          });
-          this.handleResponse(res.data);
-    
-          // 🌟 记录自动推荐
-          if (res.data.status === 'success') {
-            this.saveActionLog('auto', {
-              target_user_id: this.autoUserId,
-              top_k: this.autoTopK
-            });
-          }
-        } catch (err) {
-          this.errorMsg = '网络错误: 请求失败';
-        }
-        this.loading = false;
-      },
-    
-      // 3. 混合推荐请求
-      async getHybridRecommend() {
-        this.showLoadingState();
-    
-        try {
-          let reqData = {
-              top_k: this.hybridTopK,
-              grade: this.hybridGrade,
-              subject: this.hybridSubject
-          };
-          if (this.hybridUserId) {
-              reqData.user_id = this.hybridUserId;
-          }
-    
-          const res = await uni.request({
-            url: `http://116.62.128.164:8080/recommend/hybrid`,
-            method: 'GET',
-            data: reqData
-          });
-          this.handleResponse(res.data);
-    
-          // 🌟 记录混合推荐
-          if (res.data.status === 'success') {
-            this.saveActionLog('hybrid', {
-              target_user_id: this.hybridUserId,
-              grade: this.hybridGrade,
-              subject: this.hybridSubject,
-              top_k: this.hybridTopK
-            });
-          }
-        } catch (err) {
-          this.errorMsg = '网络错误: 请求失败';
-        }
-        this.loading = false;
-      },
+    async getActiveRecommend() {
+      if (!this.activeSubject.trim()) {
+        uni.showToast({ title: '请输入学科', icon: 'none' });
+        return;
+      }
+      
+      if (!this.currentUser) {
+        uni.showToast({ title: '请先登录', icon: 'none' });
+        return;
+      }
+      
+      this.showLoadingState();
 
-    // UI: 显示加载状态
+      try {
+        const requestData = {
+          grade: this.activeGrade,
+          subject: this.activeSubject,
+          top_k: this.activeTopK
+        };
+        
+        if (this.currentUser && this.currentUser._id) {
+          requestData.user_id = this.currentUser._id;
+        }
+        
+        const res = await uni.request({
+          url: `http://116.62.128.164:8080/recommend/active`,
+          method: 'GET',
+          data: requestData
+        });
+
+        this.handleResponse(res.data);
+        
+        if (res.data.status === 'success') {
+          this.saveActionLog('active', {
+            grade: this.activeGrade,
+            subject: this.activeSubject,
+            top_k: this.activeTopK
+          });
+        }
+      } catch (err) {
+        this.errorMsg = '网络错误: 请求失败';
+      }
+      this.loading = false;
+    },
+    
+    async getAutoRecommend() {
+      if (!this.currentUser) {
+        uni.showToast({ title: '请先登录', icon: 'none' });
+        return;
+      }
+      
+      this.showLoadingState();
+
+      try {
+        const res = await uni.request({
+          url: `http://116.62.128.164:8080/recommend/auto`,
+          method: 'GET',
+          data: {
+            user_id: this.currentUser._id,
+            top_k: this.autoTopK
+          }
+        });
+        this.handleResponse(res.data);
+
+        if (res.data.status === 'success') {
+          this.saveActionLog('auto', {
+            target_user_id: this.currentUser._id,
+            top_k: this.autoTopK
+          });
+        }
+      } catch (err) {
+        this.errorMsg = '网络错误: 请求失败';
+      }
+      this.loading = false;
+    },
+    
+    async getHybridRecommend() {
+      if (!this.currentUser) {
+        uni.showToast({ title: '请先登录', icon: 'none' });
+        return;
+      }
+      
+      this.showLoadingState();
+
+      try {
+        const res = await uni.request({
+          url: `http://116.62.128.164:8080/recommend/hybrid`,
+          method: 'GET',
+          data: {
+            user_id: this.currentUser._id,
+            grade: this.hybridGrade,
+            subject: this.hybridSubject,
+            top_k: this.hybridTopK
+          }
+        });
+        this.handleResponse(res.data);
+
+        if (res.data.status === 'success') {
+          this.saveActionLog('hybrid', {
+            target_user_id: this.currentUser._id,
+            grade: this.hybridGrade,
+            subject: this.hybridSubject,
+            top_k: this.hybridTopK
+          });
+        }
+      } catch (err) {
+        this.errorMsg = '网络错误: 请求失败';
+      }
+      this.loading = false;
+    },
+
     showLoadingState() {
       this.showResult = true;
       this.loading = true;
@@ -307,7 +338,6 @@ export default {
       this.resultData = {};
     },
 
-    // UI: 处理响应并渲染
     handleResponse(data) {
       if (data.status !== 'success') {
         this.errorMsg = data.message || '获取推荐失败';
@@ -346,7 +376,6 @@ export default {
   display: block;
 }
 
-/* 选项卡样式 */
 .tabs {
   display: flex;
   gap: 20rpx;
@@ -370,7 +399,6 @@ export default {
   color: #667eea;
 }
 
-/* 卡片样式 */
 .card {
   background: #fff;
   border-radius: 24rpx;
@@ -424,7 +452,6 @@ export default {
   padding: 10rpx 0;
 }
 
-/* 结果列表与提示区 */
 .loading-area, .error {
   text-align: center;
   padding: 40rpx;
@@ -485,7 +512,6 @@ export default {
   color: #667eea;
 }
 
-/* 底部统计分析 */
 .stats {
   text-align: center;
   color: #666;
