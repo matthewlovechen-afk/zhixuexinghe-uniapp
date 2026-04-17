@@ -29,10 +29,6 @@
 			"style": { "navigationBarTitleText": "修改密码" }
 		},
 		{
-			"path": "pages/webview/webview",
-			"style": { "navigationBarTitleText": "资源详情" }
-		},
-		{
 			"path": "pages/profile/personal-info/personal-info",
 			"style": {
 				"navigationBarTitleText": "个人信息"
@@ -54,13 +50,12 @@
 		},
 		{
 		    "path": "pages/webview/webview",
-		    "style": {
-		        "navigationBarTitleText": "学习资源",
-		        "navigationBarBackgroundColor": "#667eea",
-		        "navigationBarTextStyle": "white",
-		        "mp-weixin": {
-		            "usingComponents": {}
-		        }
+		            "style": {
+		                "navigationBarTitleText": "内容详情",
+		                "navigationBarBackgroundColor": "#667eea",
+		                "navigationBarTextStyle": "white",
+		                "navigationStyle": "default"
+					}
 		    }
 		}
 	],
