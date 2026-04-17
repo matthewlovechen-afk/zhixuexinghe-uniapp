@@ -1,21 +1,11 @@
 <template>
     <view class="webview-container">
-        <!-- 自定义导航栏 -->
-        <view class="custom-navbar" v-if="showNavbar">
-            <view class="navbar-left" @click="goBack">
-                <text class="back-icon">←</text>
-                <text class="back-text">返回</text>
-            </view>
-            <view class="navbar-title">浏览内容</view>
-            <view class="navbar-right"></view>
-        </view>
-        
-        <!-- web-view 组件 -->
         <web-view 
             :src="url" 
             @message="handleMessage"
-            :style="{ top: showNavbar ? '44px' : '0' }"
-        ></web-view>
+            @load="onWebviewLoad"
+            @error="onWebviewError">
+        </web-view>
     </view>
 </template>
 
@@ -24,25 +14,28 @@ export default {
     data() {
         return {
             url: '',
-            showNavbar: true,  // 是否显示导航栏
             startTime: null,
-            currentResourceId: ''
+            currentResourceId: '',
+            loadCount: 0
         }
     },
     onLoad(options) {
         if (options.url) {
             this.url = decodeURIComponent(options.url);
         }
+		if (options.resource_id) {
+		        this.currentResourceId = options.resource_id;
+		    }
         this.recordClick(options);
     },
     methods: {
-        goBack() {
-            // 直接返回上一页（推荐页面）
-            uni.navigateBack({
-                delta: 1
-            });
+        onWebviewLoad(e) {
+            this.loadCount++;
+            console.log('web-view加载完成，次数:', this.loadCount);
         },
-        
+        onWebviewError(e) {
+            console.error('web-view加载错误:', e);
+        },
         recordClick(options) {
             const userInfo = uni.getStorageSync('userInfo');
             const resourceId = options.resource_id || '';
@@ -61,13 +54,12 @@ export default {
                 this.currentResourceId = resourceId;
             }
         },
-        
         handleMessage(e) {
-            // 接收 web-view 发送的消息（可选）
-            console.log('web-view消息:', e);
+            console.log('web-view message:', e.detail);
         }
     },
     onUnload() {
+        // 记录完成学习
         if (this.startTime && this.currentResourceId) {
             const duration = Math.floor((Date.now() - this.startTime) / 1000);
             const userInfo = uni.getStorageSync('userInfo');
@@ -92,60 +84,5 @@ export default {
 .webview-container {
     width: 100%;
     height: 100vh;
-    position: relative;
-}
-
-.custom-navbar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 44px;
-    background-color: #667eea;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 15px;
-    z-index: 999;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.navbar-left {
-    display: flex;
-    align-items: center;
-    padding: 5px 10px;
-}
-
-.back-icon {
-    font-size: 24px;
-    color: #fff;
-    margin-right: 5px;
-}
-
-.back-text {
-    font-size: 16px;
-    color: #fff;
-}
-
-.navbar-title {
-    font-size: 16px;
-    color: #fff;
-    font-weight: bold;
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.navbar-right {
-    width: 60px;
-}
-
-web-view {
-    position: absolute;
-    top: 44px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
 }
 </style>
