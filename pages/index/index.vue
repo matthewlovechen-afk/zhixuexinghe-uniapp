@@ -108,7 +108,7 @@
             <text v-if="item.score" class="tag tag-score">匹配度 {{ Math.round(item.score * 100) }}%</text>
           </view>
           <view class="item-desc">学科: {{ item.subject || '暂无' }}</view>
-          <view class="result-link" @click="openLink(item.url)">点击查看详情</view>
+          <view class="result-link" @click="openLink(item.url)">点击查看详情 →</view>
         </view>
         
         <view class="stats">
@@ -186,12 +186,21 @@ export default {
       if (type === 'hybrid') this.hybridTopK = val;
     },
 
-    openLink(url) {
-      if(!url) return;
-      const encodedUrl = encodeURIComponent(url);
-      uni.navigateTo({
-        url: `/pages/webview/webview?url=${encodedUrl}`
-      });
+    openLink(item) {
+        if(!item || !item.url) return;
+        
+        const encodedUrl = encodeURIComponent(item.url);
+        const resourceId = item.resource_id || this.generateResourceId(item);
+        
+        uni.navigateTo({
+            url: `/pages/webview/webview?url=${encodedUrl}&resource_id=${resourceId}`
+        });
+    },
+    
+    // 辅助方法：如果没有resource_id，根据标题生成一个
+    generateResourceId(item) {
+        // 简单生成一个唯一标识
+        return String(item.title || '').replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '').substring(0, 20) + '_' + Date.now();
     },
     
     async saveActionLog(type, params) {
