@@ -108,7 +108,7 @@
             <text v-if="item.score" class="tag tag-score">匹配度 {{ Math.round(item.score * 100) }}%</text>
           </view>
           <view class="item-desc">学科: {{ item.subject || '暂无' }}</view>
-          <view class="result-link" @click="openLink(item.url)">点击查看详情 →</view>
+          <view class="result-link" @click="openLink(item)">点击查看详情 →</view>
         </view>
         
         <view class="stats">
@@ -122,7 +122,6 @@
     </view>
   </view>
 </template>
-
 <script>
 export default {
   data() {
@@ -152,9 +151,21 @@ export default {
   },
   onLoad() {
     this.checkLoginStatus();
+    console.log('当前用户完整信息:', JSON.stringify(this.currentUser));
+    console.log('当前用户_id:', this.currentUser?._id);
   },
-  onShow() {
+  async onShow() {
     this.checkLoginStatus();
+    if (this.currentUser) {
+        const preference = await this.getUserPreferenceFromDB();
+        if (preference) {
+            this.activeGrade = preference.grade;
+            this.activeSubject = preference.subject;
+            this.hybridGrade = preference.grade;
+            this.hybridSubject = preference.subject;
+            console.log('已自动填充用户偏好:', preference);
+        }
+    }
   },
   methods: {
     checkLoginStatus() {
@@ -197,9 +208,7 @@ export default {
         });
     },
     
-    // 辅助方法：如果没有resource_id，根据标题生成一个
     generateResourceId(item) {
-        // 简单生成一个唯一标识
         return String(item.title || '').replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '').substring(0, 20) + '_' + Date.now();
     },
     
@@ -226,7 +235,7 @@ export default {
         } catch (e) {
           console.error('行为记录存储失败:', e);
         }
-      },
+    },
     
     async getActiveRecommend() {
       if (!this.activeSubject.trim()) {
@@ -273,35 +282,155 @@ export default {
       this.loading = false;
     },
     
-    async getAutoRecommend() {
-      if (!this.currentUser) {
-        uni.showToast({ title: '请先登录', icon: 'none' });
-        return;
-      }
-      
-      this.showLoadingState();
-
-      try {
-        const res = await uni.request({
-          url: `http://116.62.128.164:8080/recommend/auto`,
-          method: 'GET',
-          data: {
-            user_id: this.currentUser._id,
-            top_k: this.autoTopK
-          }
-        });
-        this.handleResponse(res.data);
-
-        if (res.data.status === 'success') {
-          this.saveActionLog('auto', {
-            target_user_id: this.currentUser._id,
-            top_k: this.autoTopK
-          });
+    async getUserPreferenceFromDB() {
+        if (!this.currentUser || !this.currentUser._id) {
+            console.log('用户未登录');
+            return null;
         }
-      } catch (err) {
-        this.errorMsg = '网络错误: 请求失败';
-      }
-      this.loading = false;
+        
+        try {
+            const db = uniCloud.database();
+            const res = await db.collection('recommend-history')
+                .where({
+                    user_id: this.currentUser._id
+                })
+                .orderBy('create_date', 'desc')
+                .limit(20)
+                .get();
+            
+            console.log('查询结果:', JSON.stringify(res));
+            
+            const historyData = res.data || [];
+            
+            console.log('历史记录数量:', historyData.length);
+            
+            if (historyData.length > 0) {
+                const gradeCount = {};
+                const subjectCount = {};
+                
+                historyData.forEach(item => {
+                    if (item.grade) {
+                        gradeCount[item.grade] = (gradeCount[item.grade] || 0) + 1;
+                    }
+                    if (item.subject) {
+                        subjectCount[item.subject] = (subjectCount[item.subject] || 0) + 1;
+                    }
+                });
+                
+                let preferredGrade = '初中';
+                let maxGrade = 0;
+                Object.keys(gradeCount).forEach(g => {
+                    if (gradeCount[g] > maxGrade) {
+                        maxGrade = gradeCount[g];
+                        preferredGrade = g;
+                    }
+                });
+                
+                let preferredSubject = '数学';
+                let maxSubject = 0;
+                Object.keys(subjectCount).forEach(s => {
+                    if (subjectCount[s] > maxSubject) {
+                        maxSubject = subjectCount[s];
+                        preferredSubject = s;
+                    }
+                });
+                
+                return {
+                    grade: preferredGrade,
+                    subject: preferredSubject,
+                    count: historyData.length
+                };
+            }
+            
+            return null;
+        } catch (e) {
+            console.error('查询失败:', e);
+            return null;
+        }
+    },
+    
+    async getAutoRecommend() {
+        if (!this.currentUser) {
+            uni.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        
+        this.showLoadingState();
+    
+        try {
+            const historyRes = await uniCloud.callFunction({
+                name: 'get-all-history',
+                data: {}
+            });
+            
+            const historyData = historyRes.result.data || [];
+            console.log('云函数返回数据条数:', historyData.length);
+            
+            // 先尝试协同过滤
+            const res = await uni.request({
+                url: `http://116.62.128.164:8080/recommend/auto`,
+                method: 'POST',
+                header: { 'Content-Type': 'application/json' },
+                data: {
+                    user_id: this.currentUser._id,
+                    top_k: parseInt(this.autoTopK),
+                    history: historyData
+                }
+            });
+            
+            // 如果协同过滤有结果，直接展示
+            if (res.data.status === 'success' && res.data.recommendations.length > 0) {
+                this.handleResponse(res.data);
+                this.saveActionLog('auto', { target_user_id: this.currentUser._id, top_k: this.autoTopK });
+                this.loading = false;
+                return;
+            }
+            
+            // 协同过滤无结果，用当前用户的搜索历史应急推荐
+            console.log('协同过滤无结果，使用搜索历史推荐');
+            
+            // 筛选当前用户的搜索记录
+            const myHistory = historyData.filter(r => r.user_id === this.currentUser._id);
+            console.log('当前用户搜索记录:', myHistory.length, '条');
+            
+            if (myHistory.length > 0) {
+                // 取最近搜索的年级和学科
+                const latest = myHistory[myHistory.length - 1];
+                const grade = latest.grade || '初中';
+                const subject = latest.subject || '数学';
+                
+                console.log('使用最近搜索:', grade, subject);
+                
+                // 调用主动推荐接口
+                const contentRes = await uni.request({
+                    url: `http://116.62.128.164:8080/recommend/active`,
+                    method: 'GET',
+                    data: {
+                        grade: grade,
+                        subject: subject,
+                        top_k: parseInt(this.autoTopK),
+                        user_id: this.currentUser._id
+                    }
+                });
+                
+                if (contentRes.data.status === 'success') {
+                    contentRes.data.type = 'search_history_fallback';
+                    contentRes.data.message = `根据您最近的搜索记录，为您推荐${grade}${subject}相关内容`;
+                    this.handleResponse(contentRes.data);
+                    this.saveActionLog('auto_fallback', { grade, subject, top_k: this.autoTopK });
+                    this.loading = false;
+                    return;
+                }
+            }
+            
+            // 完全没有历史，显示提示
+            this.errorMsg = '暂无历史数据，请先使用「探索新内容」搜索感兴趣的内容';
+            
+        } catch (err) {
+            console.error('请求失败:', err);
+            this.errorMsg = '网络错误: 请求失败';
+        }
+        this.loading = false;
     },
     
     async getHybridRecommend() {
