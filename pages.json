@@ -49,6 +49,12 @@
 			}
 		},
 		{
+			"path": "pages/virtual-env/virtual-env",
+			"style": {
+				"navigationBarTitleText": "虚拟环境"
+			}
+		},
+		{
 		    "path": "pages/webview/webview",
 		        "style": {
 		            "navigationBarTitleText": "内容详情",
@@ -90,6 +96,12 @@
 				"text": "社区",
 				"iconPath": "static/tab/community.png",
 				"selectedIconPath": "static/tab/community-active.png"
+			},
+			{
+				"pagePath": "pages/virtual-env/virtual-env",
+				"text": "虚拟环境",
+				"iconPath": "static/tab/virtual.png", 
+				"selectedIconPath": "static/tab/virtual-active.png"
 			},
 			{
 				"pagePath": "pages/profile/profile",
