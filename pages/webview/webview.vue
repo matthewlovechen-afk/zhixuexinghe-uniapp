@@ -28,6 +28,11 @@ export default {
 		    }
         this.recordClick(options);
     },
+	onBackPress(e) {
+	        // 阻止默认返回行为，确保返回到推荐页面而非登录页
+	        console.log('webview 返回');
+	        // 不返回 true，让系统正常处理
+	    },
     methods: {
         onWebviewLoad(e) {
             this.loadCount++;
