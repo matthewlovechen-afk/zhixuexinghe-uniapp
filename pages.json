@@ -50,13 +50,21 @@
 		},
 		{
 		    "path": "pages/webview/webview",
-		            "style": {
-		                "navigationBarTitleText": "内容详情",
-		                "navigationBarBackgroundColor": "#667eea",
-		                "navigationBarTextStyle": "white",
-		                "navigationStyle": "default"
-					}
-		    }
+		        "style": {
+		            "navigationBarTitleText": "内容详情",
+		            "navigationBarBackgroundColor": "#667eea",
+		            "navigationBarTextStyle": "white",
+		            "navigationStyle": "default",
+		            "app-plus": {
+		                "titleNView": {
+		                    "autoBackButton": true,
+		                    "backButton": {
+		                        "title": "返回",
+		                        "color": "#ffffff"
+		                    }
+		                }
+		            }
+		        }
 		}
 	],
 	"tabBar": {
